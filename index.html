@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPS Dashboard - Stonly</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 24px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header .subtitle { opacity: 0.7; font-size: 14px; margin-top: 4px; }
+        .date-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .date-filter label { font-size: 12px; opacity: 0.7; }
+        .date-filter input[type="date"] {
+            padding: 6px 10px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 13px;
+        }
+        .date-filter input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+        .status-bar {
+            background: #fff3cd;
+            border-bottom: 1px solid #ffc107;
+            padding: 12px 32px;
+            font-size: 13px;
+            color: #856404;
+            display: none;
+        }
+        .status-bar.error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .status-bar.success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .status-bar.visible { display: block; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; margin-bottom: 8px; }
+        .card .value { font-size: 32px; font-weight: 700; }
+        .card .sub { font-size: 12px; color: #888; margin-top: 4px; }
+        .nps-score { color: #2ecc71; }
+        .nps-score.warning { color: #f39c12; }
+        .nps-score.danger { color: #e74c3c; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        @media (max-width: 1024px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .panel h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #1a1a2e; }
+        .chart-container { position: relative; height: 280px; }
+        .product-section { margin-bottom: 32px; }
+        .product-section h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .product-section h2 .badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+            font-weight: 500;
+        }
+        .badge-design { background: #e8f4fd; color: #0277bd; }
+        .badge-manage { background: #e8f5e9; color: #2e7d32; }
+        .badge-creator { background: #fce4ec; color: #c62828; }
+        .breakdown-bar {
+            display: flex;
+            height: 32px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+        .breakdown-bar .promoter { background: #2ecc71; }
+        .breakdown-bar .passive { background: #f39c12; }
+        .breakdown-bar .detractor { background: #e74c3c; }
+        .breakdown-legend {
+            display: flex;
+            gap: 24px;
+            font-size: 13px;
+            color: #555;
+        }
+        .breakdown-legend span::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 6px;
+        }
+        .breakdown-legend .leg-promoter::before { background: #2ecc71; }
+        .breakdown-legend .leg-passive::before { background: #f39c12; }
+        .breakdown-legend .leg-detractor::before { background: #e74c3c; }
+        .responses-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .responses-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            color: #555;
+        }
+        .responses-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .responses-table tr:hover td { background: #f8f9fa; }
+        .score-badge {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            line-height: 28px;
+            text-align: center;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            color: white;
+        }
+        .score-badge.promoter { background: #2ecc71; }
+        .score-badge.passive { background: #f39c12; }
+        .score-badge.detractor { background: #e74c3c; }
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .loading-overlay.hidden { display: none; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #1a1a2e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #uploadZone.dragover { border-color: #1a1a2e; background: #f0f2f5; }
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 0;
+        }
+        .tab-nav button {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            cursor: pointer;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab-nav button.active { color: #1a1a2e; border-bottom-color: #1a1a2e; font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div>Loading NPS data...</div>
+    </div>
+
+    <header class="header">
+        <div>
+            <h1>NPS Dashboard</h1>
+            <div class="subtitle" id="subtitle">Design &bull; Manage360 &bull; Creator &mdash; 2026</div>
+        </div>
+        <div class="date-filter">
+            <div>
+                <label>From</label><br>
+                <input type="date" id="dateFrom" value="2026-01-01" min="2026-01-01" max="2026-12-31" onchange="applyDateFilter()">
+            </div>
+            <div>
+                <label>To</label><br>
+                <input type="date" id="dateTo" value="2026-12-31" min="2026-01-01" max="2026-12-31" onchange="applyDateFilter()">
+            </div>
+        </div>
+    </header>
+
+    <div class="status-bar" id="statusBar"></div>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div class="tab-nav" style="margin-bottom: 0;">
+                <button class="active" onclick="switchTab('overview')">Overview</button>
+                <button onclick="switchTab('design')">Design</button>
+                <button onclick="switchTab('manage360')">Manage360</button>
+                <button onclick="switchTab('creator')">Creator</button>
+            </div>
+            <a href="#" onclick="toggleAdmin(); return false;" style="font-size: 12px; color: #999; text-decoration: none; padding-bottom: 12px;">Admin</a>
+        </div>
+
+        <!-- Admin Upload Panel (hidden) -->
+        <div id="adminPanel" style="display: none; margin-bottom: 24px;">
+            <div style="background: white; border: 2px dashed #1a1a2e; border-radius: 12px; padding: 24px;">
+                <h3 style="margin-bottom: 12px; font-size: 16px;">Upload Stonly Export Data</h3>
+                <div id="uploadZone" onclick="document.getElementById('fileInput').click()" style="border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.2s;">
+                    <p style="font-size: 14px; margin-bottom: 4px;"><strong>Drop Stonly ZIP exports here</strong></p>
+                    <p style="font-size: 13px; color: #666;">or click to browse</p>
+                    <p style="font-size: 11px; color: #999; margin-top: 8px;">Only 2026 data will be imported. Accepts *_GUIDE_sessionsExport.zip files.</p>
+                </div>
+                <input type="file" id="fileInput" multiple accept=".zip,.csv" style="display:none" onchange="handleFiles(this.files)">
+                <div id="uploadLog" style="display: none; background: #f8f9fa; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; max-height: 150px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Overview Tab -->
+        <div class="tab-content active" id="tab-overview">
+            <div class="summary-cards" id="summaryCards"></div>
+            <div class="grid-2">
+                <div class="panel">
+                    <h3>NPS Scores by Product</h3>
+                    <div class="chart-container"><canvas id="chartComparison"></canvas></div>
+                </div>
+                <div class="panel">
+                    <h3>Response Distribution</h3>
+                    <div class="chart-container"><canvas id="chartDistribution"></canvas></div>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>NPS Trend Over Time</h3>
+                <div class="chart-container" style="height: 320px;"><canvas id="chartTrend"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Design Tab -->
+        <div class="tab-content" id="tab-design">
+            <div class="product-section">
+                <h2>Design <span class="badge badge-design">De6khYJTBB</span></h2>
+                <div id="design-content"></div>
+            </div>
+        </div>
+
+        <!-- Manage360 Tab -->
+        <div class="tab-content" id="tab-manage360">
+            <div class="product-section">
+                <h2>Manage360 <span class="badge badge-manage">3 Surveys</span></h2>
+                <div id="manage360-content"></div>
+            </div>
+        </div>
+
+        <!-- Creator Tab -->
+        <div class="tab-content" id="tab-creator">
+            <div class="product-section">
+                <h2>Creator <span class="badge badge-creator">2 Surveys</span></h2>
+                <div id="creator-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const GUIDES = {
+        design: { id: 'De6khYJTBB', name: 'Design', color: '#0277bd', surveys: [{ id: 'De6khYJTBB', label: 'Design' }] },
+        manage360: {
+            id: 'manage360', name: 'Manage360', color: '#2e7d32',
+            surveys: [
+                { id: 'kEv6S4AnyY', label: '3 months' },
+                { id: 'urEZe04ijY', label: '6 months' },
+                { id: 'G0xLZRCAxp', label: '1 year' }
+            ]
+        },
+        creator: {
+            id: 'creator', name: 'Creator', color: '#c62828',
+            surveys: [
+                { id: 'M4t1cJbz6z', label: '3 months' },
+                { id: 'pykvPiVPUt', label: '6 months' }
+            ]
+        }
+    };
+
+    // --- Stonly API Client (Content/Structure only) ---
+    // The public API does NOT expose session/response data.
+    // Response data comes from CSV exports embedded below.
+    const StonlyAPI = {
+        baseUrl: 'https://public.stonly.com/api/v3',
+        apiKey: 'bk7cf4Bs8Q2LTtsHLLCNOhhE5ckVKHoNBbvg',
+        teamId: '21556',
+        headers() {
+            return {
+                'Authorization': 'Basic ' + btoa(':' + this.apiKey),
+                'Content-Type': 'application/json'
+            };
+        },
+        async getGuideExport(contentId) {
+            const url = `${this.baseUrl}/guide/export?teamId=${this.teamId}&contentId=${contentId}`;
+            const resp = await fetch(url, { headers: this.headers() });
+            if (!resp.ok) throw new Error(`Stonly API ${resp.status}: ${resp.statusText}`);
+            return resp.json();
+        },
+        async getFolderStructure(folderId) {
+            const url = `${this.baseUrl}/folder/structure?teamId=${this.teamId}&folderId=${folderId}`;
+            const resp = await fetch(url, { headers: this.headers() });
+            if (!resp.ok) throw new Error(`Stonly API ${resp.status}: ${resp.statusText}`);
+            return resp.json();
+        },
+        async searchAI(query) {
+            const url = `${this.baseUrl}/ai/search?teamId=${this.teamId}`;
+            const resp = await fetch(url, { method: 'POST', headers: this.headers(), body: JSON.stringify({ query }) });
+            if (!resp.ok) throw new Error(`Stonly API ${resp.status}: ${resp.statusText}`);
+            return resp.json();
+        }
+    };
+
+    // All 2026 NPS response data (from Stonly CSV exports)
+    const ALL_DATA = {
+        'De6khYJTBB': { id: 'De6khYJTBB', label: 'Design', responses: [] },
+        'kEv6S4AnyY': { id: 'kEv6S4AnyY', label: '3 months', responses: [
+            { score: 1, comment: "Clunkiest system of all time. Totally unnatural and unintuitive to use, leads sort weird, quoting is slow and unnecessarily complicated. You need to put a software developer and an experienced estimator in the same room together to streamline how much of a dog's breakfast this system is.", date: '2026-05-15 12:53:11', email: 'cedarsprings.blootens@cedarsprings.net' },
+            { score: 10, comment: '', date: '2026-05-13 12:02:43', email: 'manage360testwe.qa.support@dynascape.com' },
+            { score: 7, comment: '', date: '2026-05-11 12:47:55', email: 'platthill.heididahlquist@platthillnursery.com' }
+        ]},
+        'urEZe04ijY': { id: 'urEZe04ijY', label: '6 months', responses: [
+            { score: 8, comment: 'good', date: '2026-05-27 13:21:11', email: 'yardology.wilber@yardology.com' },
+            { score: 7, comment: "Time consuming to set up, now it's getting easier to use. There is definitely a learning curve.", date: '2026-05-25 18:57:09', email: 'azinterlock.peter@a-zlandscape.ca' },
+            { score: 10, comment: 'Easy-to-use product. Things that could use improvement: a better plant database for warm-weather climates. Some sort of way to link multiple design pages to create a layout/file - downloading as PDF and combining in Adobe is tedious', date: '2026-05-20 15:53:06', email: 'labelmanager.camlandscapedesign@gmail.com' },
+            { score: 10, comment: '', date: '2026-05-07 16:29:09', email: 'mci.mcireland1@gmail.com' },
+            { score: 9, comment: 'GREAT', date: '2026-05-04 10:45:29', email: 'mci.mcireland1@gmail.com' }
+        ]},
+        'G0xLZRCAxp': { id: 'G0xLZRCAxp', label: '1 year', responses: [
+            { score: 10, comment: '', date: '2026-05-25 17:15:47', email: 'premieroutdoor.jon@poeinc.us' },
+            { score: 8, comment: '', date: '2026-05-22 12:13:18', email: 'biota.tony@biotalandscapes.com' },
+            { score: 2, comment: "It has a lot of positives, but there is very little customization and the software isn't user friendly.", date: '2026-05-10 09:55:47', email: 'lukelandscape.msimons@lukelandscape.com' },
+            { score: 1, comment: 'Switch to gross margin', date: '2026-05-07 19:30:00', email: 'templetonlandscapes.chris@templetonlandscapes.com' }
+        ]},
+        'M4t1cJbz6z': { id: 'M4t1cJbz6z', label: '3 months', responses: [
+            { score: 0, comment: '', date: '2026-05-11 18:49:54', email: 'service@lawnworks-pc.com' }
+        ]},
+        'pykvPiVPUt': { id: 'pykvPiVPUt', label: '6 months', responses: [
+            { score: 7, comment: "I want there to be more capabilities in the program that are more similar to Dynascape Design. I want to be able to join lines. I want to be able to group figures for more seamless labelling. Copying and pasting when the scale of a figure has been changed is extremely weird and it places the figure at a strange place on the page.", date: '2026-05-23 16:26:29', email: 'leah.d.kay@gmail.com' },
+            { score: 10, comment: '', date: '2026-05-06 01:33:00', email: 'romeaux@sbcglobal.net' }
+        ]}
+    };
+
+    let filteredData = {};
+    let charts = {};
+
+    function getDateRange() {
+        const from = document.getElementById('dateFrom').value;
+        const to = document.getElementById('dateTo').value;
+        return {
+            from: new Date(from + 'T00:00:00'),
+            to: new Date(to + 'T23:59:59')
+        };
+    }
+
+    function applyDateFilter() {
+        const { from, to } = getDateRange();
+        filteredData = {};
+        for (const [id, guide] of Object.entries(ALL_DATA)) {
+            filteredData[id] = {
+                ...guide,
+                responses: guide.responses.filter(r => {
+                    const d = new Date(r.date);
+                    return d >= from && d <= to;
+                })
+            };
+        }
+        updateSubtitle(from, to);
+        renderDashboard();
+    }
+
+    function updateSubtitle(from, to) {
+        const fmt = d => d.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+        document.getElementById('subtitle').textContent =
+            `Design • Manage360 • Creator — ${fmt(from)} to ${fmt(to)}`;
+    }
+
+    function calculateNps(responses) {
+        if (!responses.length) return { score: null, promoters: 0, passives: 0, detractors: 0, total: 0 };
+        let promoters = 0, passives = 0, detractors = 0;
+        responses.forEach(r => {
+            if (r.score >= 9) promoters++;
+            else if (r.score >= 7) passives++;
+            else detractors++;
+        });
+        const total = responses.length;
+        const score = Math.round(((promoters - detractors) / total) * 100);
+        return { score, promoters, passives, detractors, total };
+    }
+
+    function renderDashboard() {
+        renderSummaryCards();
+        renderComparisonChart();
+        renderDistributionChart();
+        renderTrendChart();
+        renderProductTab('design', GUIDES.design);
+        renderProductTab('manage360', GUIDES.manage360);
+        renderProductTab('creator', GUIDES.creator);
+    }
+
+    function renderSummaryCards() {
+        const container = document.getElementById('summaryCards');
+        const products = [
+            { key: 'Design', ids: ['De6khYJTBB'], color: '#0277bd' },
+            { key: 'Manage360', ids: ['kEv6S4AnyY', 'urEZe04ijY', 'G0xLZRCAxp'], color: '#2e7d32' },
+            { key: 'Creator', ids: ['M4t1cJbz6z', 'pykvPiVPUt'], color: '#c62828' },
+        ];
+
+        container.innerHTML = products.map(p => {
+            const responses = p.ids.flatMap(id => (filteredData[id]?.responses || []));
+            const nps = calculateNps(responses);
+            const scoreClass = nps.score === null ? '' : nps.score >= 50 ? 'nps-score' : nps.score >= 0 ? 'nps-score warning' : 'nps-score danger';
+            return `<div class="card" style="border-left: 4px solid ${p.color};">
+                <div class="label">${p.key}</div>
+                <div class="value ${scoreClass}">${nps.score !== null ? nps.score : '—'}</div>
+                <div class="sub">${nps.total} responses | P:${nps.promoters} Pa:${nps.passives} D:${nps.detractors}</div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderComparisonChart() {
+        const ctx = document.getElementById('chartComparison');
+        if (charts.comparison) charts.comparison.destroy();
+
+        const products = [
+            { label: 'Design', ids: ['De6khYJTBB'], color: '#0277bd' },
+            { label: 'M360 3mo', ids: ['kEv6S4AnyY'], color: '#2e7d32' },
+            { label: 'M360 6mo', ids: ['urEZe04ijY'], color: '#388e3c' },
+            { label: 'M360 1yr', ids: ['G0xLZRCAxp'], color: '#4caf50' },
+            { label: 'Creator 3mo', ids: ['M4t1cJbz6z'], color: '#c62828' },
+            { label: 'Creator 6mo', ids: ['pykvPiVPUt'], color: '#e53935' },
+        ];
+
+        const scores = products.map(p => {
+            const responses = p.ids.flatMap(id => (filteredData[id]?.responses || []));
+            return calculateNps(responses).score || 0;
+        });
+
+        charts.comparison = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: products.map(p => p.label),
+                datasets: [{ data: scores, backgroundColor: products.map(p => p.color), borderRadius: 6, barThickness: 40 }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { min: -100, max: 100, grid: { color: '#f0f0f0' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function renderDistributionChart() {
+        const ctx = document.getElementById('chartDistribution');
+        if (charts.distribution) charts.distribution.destroy();
+
+        const allResponses = Object.values(filteredData).flatMap(d => d.responses || []);
+        const nps = calculateNps(allResponses);
+
+        charts.distribution = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Promoters (9-10)', 'Passives (7-8)', 'Detractors (0-6)'],
+                datasets: [{ data: [nps.promoters, nps.passives, nps.detractors], backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c'], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { padding: 16 } } },
+                cutout: '60%'
+            }
+        });
+    }
+
+    function renderTrendChart() {
+        const ctx = document.getElementById('chartTrend');
+        if (charts.trend) charts.trend.destroy();
+
+        const { from, to } = getDateRange();
+        const productGroups = [
+            { label: 'Design', ids: ['De6khYJTBB'], color: '#0277bd' },
+            { label: 'Manage360', ids: ['kEv6S4AnyY', 'urEZe04ijY', 'G0xLZRCAxp'], color: '#2e7d32' },
+            { label: 'Creator', ids: ['M4t1cJbz6z', 'pykvPiVPUt'], color: '#c62828' },
+        ];
+
+        // Generate monthly buckets within the selected range
+        const months = [];
+        const startMonth = new Date(from.getFullYear(), from.getMonth(), 1);
+        const endMonth = new Date(to.getFullYear(), to.getMonth(), 1);
+        for (let d = new Date(startMonth); d <= endMonth; d.setMonth(d.getMonth() + 1)) {
+            const mStart = new Date(d);
+            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            months.push({
+                label: mStart.toLocaleDateString('en', { month: 'short' }),
+                start: mStart,
+                end: mEnd
+            });
+        }
+
+        const datasets = productGroups.map(pg => {
+            const responses = pg.ids.flatMap(id => (filteredData[id]?.responses || []));
+            const data = months.map(m => {
+                const monthResponses = responses.filter(r => {
+                    const d = new Date(r.date);
+                    return d >= m.start && d <= m.end;
+                });
+                return monthResponses.length >= 2 ? calculateNps(monthResponses).score : null;
+            });
+            return { label: pg.label, data, borderColor: pg.color, backgroundColor: pg.color + '20', tension: 0.3, fill: true, spanGaps: true };
+        });
+
+        charts.trend = new Chart(ctx, {
+            type: 'line',
+            data: { labels: months.map(m => m.label), datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { min: -100, max: 100, grid: { color: '#f0f0f0' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function renderProductTab(tabKey, product) {
+        const container = document.getElementById(`${tabKey}-content`);
+        if (!container) return;
+
+        let html = '<div class="summary-cards">';
+        product.surveys.forEach(s => {
+            const data = filteredData[s.id];
+            const nps = calculateNps(data?.responses || []);
+            const scoreClass = nps.score === null ? '' : nps.score >= 50 ? 'nps-score' : nps.score >= 0 ? 'nps-score warning' : 'nps-score danger';
+            html += `<div class="card">
+                <div class="label">${s.label}</div>
+                <div class="value ${scoreClass}">${nps.score !== null ? nps.score : '—'}</div>
+                <div class="sub">${nps.total} responses | P:${nps.promoters} Pa:${nps.passives} D:${nps.detractors}</div>
+            </div>`;
+        });
+        html += '</div>';
+
+        product.surveys.forEach(s => {
+            const data = filteredData[s.id];
+            const nps = calculateNps(data?.responses || []);
+            if (nps.total === 0) return;
+            const pPct = ((nps.promoters / nps.total) * 100).toFixed(1);
+            const paPct = ((nps.passives / nps.total) * 100).toFixed(1);
+            const dPct = ((nps.detractors / nps.total) * 100).toFixed(1);
+            html += `<div style="margin-bottom: 16px;">
+                <strong>${s.label}</strong>
+                <div class="breakdown-bar">
+                    <div class="promoter" style="width:${pPct}%" title="Promoters: ${pPct}%"></div>
+                    <div class="passive" style="width:${paPct}%" title="Passives: ${paPct}%"></div>
+                    <div class="detractor" style="width:${dPct}%" title="Detractors: ${dPct}%"></div>
+                </div>
+                <div class="breakdown-legend">
+                    <span class="leg-promoter">Promoters ${pPct}%</span>
+                    <span class="leg-passive">Passives ${paPct}%</span>
+                    <span class="leg-detractor">Detractors ${dPct}%</span>
+                </div>
+            </div>`;
+        });
+
+        const isManage360 = tabKey === 'manage360';
+        const allResponses = product.surveys.flatMap(s =>
+            (filteredData[s.id]?.responses || []).map(r => ({ ...r, survey: s.label }))
+        ).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        if (allResponses.length) {
+            const emailHeader = isManage360 ? '<th>Email</th>' : '';
+            html += `<div class="panel" style="margin-top: 16px;">
+                <h3>Responses</h3>
+                <table class="responses-table">
+                    <thead><tr><th>Score</th><th>Survey</th>${emailHeader}<th>Comment</th><th>Date</th></tr></thead>
+                    <tbody>`;
+            allResponses.forEach(r => {
+                const cls = r.score >= 9 ? 'promoter' : r.score >= 7 ? 'passive' : 'detractor';
+                const date = r.date ? new Date(r.date).toLocaleDateString() : '';
+                const emailCell = isManage360 ? `<td>${r.email || ''}</td>` : '';
+                html += `<tr>
+                    <td><span class="score-badge ${cls}">${r.score}</span></td>
+                    <td>${r.survey}</td>
+                    ${emailCell}
+                    <td>${r.comment || ''}</td>
+                    <td>${date}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(`tab-${tab}`).classList.add('active');
+    }
+
+    function showStatus(msg, type) {
+        const bar = document.getElementById('statusBar');
+        bar.textContent = msg;
+        bar.className = `status-bar visible ${type}`;
+        setTimeout(() => bar.classList.remove('visible'), 8000);
+    }
+
+    // --- Admin Upload (password protected) ---
+    const ADMIN_PIN = '2026nps';
+    let adminUnlocked = false;
+
+    function toggleAdmin() {
+        if (adminUnlocked) {
+            document.getElementById('adminPanel').style.display = 'none';
+            adminUnlocked = false;
+            return;
+        }
+        const pin = prompt('Enter admin PIN to upload data:');
+        if (pin === ADMIN_PIN) {
+            adminUnlocked = true;
+            document.getElementById('adminPanel').style.display = 'block';
+        } else if (pin !== null) {
+            showStatus('Incorrect PIN.', 'error');
+        }
+    }
+
+    function setupDragDrop() {
+        const zone = document.getElementById('uploadZone');
+        if (!zone) return;
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+    }
+
+    async function handleFiles(files) {
+        const log = document.getElementById('uploadLog');
+        log.innerHTML = '';
+        log.style.display = 'block';
+        let parsed = 0;
+
+        for (const file of files) {
+            if (file.name.endsWith('.zip')) {
+                await handleZip(file);
+                parsed++;
+            } else if (file.name.endsWith('.csv')) {
+                await handleCsvFile(file);
+                parsed++;
+            } else {
+                log.innerHTML += `<div style="color:#856404;">Skipped: ${file.name} (not ZIP or CSV)</div>`;
+            }
+        }
+        if (parsed > 0) {
+            // Save to ALL_DATA and re-filter
+            applyDateFilter();
+            showStatus(`Processed ${parsed} file(s). Dashboard updated.`, 'success');
+        }
+    }
+
+    async function handleZip(file) {
+        const log = document.getElementById('uploadLog');
+        log.innerHTML += `<div>Extracting: ${file.name}...</div>`;
+        const JSZip = await loadJSZip();
+        const zip = await JSZip.loadAsync(file);
+        for (const [name, entry] of Object.entries(zip.files)) {
+            if (name.includes('sessionsExport') && name.endsWith('.csv')) {
+                const csvText = await entry.async('string');
+                processCsv(csvText, name);
+            }
+        }
+    }
+
+    async function handleCsvFile(file) {
+        const text = await file.text();
+        processCsv(text, file.name);
+    }
+
+    function processCsv(csvText, filename) {
+        const log = document.getElementById('uploadLog');
+        const KNOWN_GUIDES = ['De6khYJTBB','kEv6S4AnyY','urEZe04ijY','G0xLZRCAxp','M4t1cJbz6z','pykvPiVPUt'];
+        const GUIDE_LABELS = { 'De6khYJTBB':'Design','kEv6S4AnyY':'3 months','urEZe04ijY':'6 months','G0xLZRCAxp':'1 year','M4t1cJbz6z':'3 months','pykvPiVPUt':'6 months' };
+
+        const guideId = KNOWN_GUIDES.find(g => filename.includes(g));
+        if (!guideId) { log.innerHTML += `<div style="color:#856404;">Unknown guide in: ${filename}</div>`; return; }
+
+        const rows = parseCSV(csvText);
+        if (rows.length < 2) { log.innerHTML += `<div style="color:#856404;">No data in: ${filename}</div>`; return; }
+
+        const headers = rows[0];
+        const scoreCol = headers.findIndex(h => h.includes('NPS score'));
+        const feedbackCol = headers.findIndex(h => h.includes('NPS feedback'));
+        const inputCols = headers.reduce((acc, h, i) => h.includes('Input value') ? [...acc, i] : acc, []);
+        const emailCol = headers.findIndex(h => h.includes('Customer User ID'));
+        const dateCol = headers.findIndex(h => h.includes('sessionStart'));
+
+        if (scoreCol === -1) { log.innerHTML += `<div style="color:#856404;">No NPS score column in: ${filename}</div>`; return; }
+
+        const responses = [];
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (row.length <= scoreCol) continue;
+            const scoreVal = row[scoreCol]?.trim();
+            if (!scoreVal || scoreVal === '\\N') continue;
+            const score = parseInt(scoreVal);
+            if (isNaN(score) || score < 0 || score > 10) continue;
+
+            let comment = '';
+            if (feedbackCol >= 0 && row[feedbackCol]) {
+                const fb = row[feedbackCol].trim();
+                if (fb && fb !== '\\N') comment = fb;
+            }
+            if (!comment) {
+                const additional = inputCols.map(ic => row[ic]?.trim()).filter(v => v && v !== '\\N');
+                comment = additional.join(' | ');
+            }
+
+            const email = (emailCol >= 0 ? row[emailCol]?.trim() : '') || '';
+            const date = (dateCol >= 0 ? row[dateCol]?.trim() : '') || '';
+
+            // Only keep 2026 data
+            if (!date.startsWith('2026')) continue;
+
+            responses.push({ score, comment, date, email });
+        }
+
+        const label = GUIDE_LABELS[guideId];
+        // Merge with existing — replace all for this guide
+        ALL_DATA[guideId] = { id: guideId, label, responses };
+        log.innerHTML += `<div style="color:#155724;">${label} (${guideId}): ${responses.length} response${responses.length !== 1 ? 's' : ''}</div>`;
+    }
+
+    function parseCSV(text) {
+        const rows = [];
+        let current = [];
+        let field = '';
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (inQuotes) {
+                if (ch === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQuotes = false; }
+                else field += ch;
+            } else {
+                if (ch === '"') inQuotes = true;
+                else if (ch === ',') { current.push(field); field = ''; }
+                else if (ch === '\n' || (ch === '\r' && text[i+1] === '\n')) {
+                    current.push(field); field = ''; rows.push(current); current = [];
+                    if (ch === '\r') i++;
+                } else field += ch;
+            }
+        }
+        if (field || current.length) { current.push(field); rows.push(current); }
+        return rows;
+    }
+
+    let jsZipLoaded = null;
+    function loadJSZip() {
+        if (jsZipLoaded) return jsZipLoaded;
+        jsZipLoaded = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+            s.onload = () => resolve(window.JSZip);
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+        return jsZipLoaded;
+    }
+
+    // Initialize — default to May 2026 (the month with data)
+    document.getElementById('dateFrom').value = '2026-05-01';
+    document.getElementById('dateTo').value = '2026-05-31';
+    applyDateFilter();
+    setupDragDrop();
+    </script>
+</body>
+</html>
