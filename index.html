@@ -935,6 +935,7 @@
         const label = GUIDE_LABELS[guideId];
         // Merge with existing — replace all for this guide
         ALL_DATA[guideId] = { id: guideId, label, responses };
+        saveToLocalStorage();
         log.innerHTML += `<div style="color:#155724;">${label} (${guideId}): ${responses.length} response${responses.length !== 1 ? 's' : ''}</div>`;
     }
 
@@ -974,7 +975,36 @@
         return jsZipLoaded;
     }
 
+    const LS_KEY = 'nps_uploaded_data';
+
+    function saveToLocalStorage() {
+        try {
+            const uploadedGuides = {};
+            for (const [id, guide] of Object.entries(ALL_DATA)) {
+                uploadedGuides[id] = guide;
+            }
+            localStorage.setItem(LS_KEY, JSON.stringify(uploadedGuides));
+        } catch(e) { console.warn('localStorage save failed', e); }
+    }
+
+    function loadFromLocalStorage() {
+        try {
+            const stored = localStorage.getItem(LS_KEY);
+            if (!stored) return;
+            const saved = JSON.parse(stored);
+            for (const [id, guide] of Object.entries(saved)) {
+                if (ALL_DATA[id]) {
+                    // Only use stored if it has more or newer responses
+                    if (guide.responses && guide.responses.length > ALL_DATA[id].responses.length) {
+                        ALL_DATA[id] = guide;
+                    }
+                }
+            }
+        } catch(e) { console.warn('localStorage load failed', e); }
+    }
+
     // Initialize — default to full Jan–Apr 2026 range
+    loadFromLocalStorage();
     document.getElementById('dateFrom').value = '2026-01-01';
     document.getElementById('dateTo').value = '2026-04-30';
     applyDateFilter();
