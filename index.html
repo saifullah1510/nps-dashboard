@@ -118,6 +118,51 @@
             font-size: 13px;
             color: #555;
         }
+        .segment-stats {
+            display: flex;
+            gap: 12px;
+            margin: 14px 0 6px;
+            flex-wrap: wrap;
+        }
+        .segment-stat {
+            flex: 1;
+            min-width: 90px;
+            border-radius: 10px;
+            padding: 12px 16px;
+            text-align: center;
+        }
+        .segment-stat.promoter-stat { background: #e8faf0; border: 1px solid #2ecc71; }
+        .segment-stat.passive-stat  { background: #fef6e4; border: 1px solid #f39c12; }
+        .segment-stat.detractor-stat{ background: #fdecea; border: 1px solid #e74c3c; }
+        .segment-stat .seg-pct {
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .segment-stat.promoter-stat  .seg-pct { color: #27ae60; }
+        .segment-stat.passive-stat   .seg-pct { color: #e67e22; }
+        .segment-stat.detractor-stat .seg-pct { color: #c0392b; }
+        .segment-stat .seg-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+            opacity: 0.75;
+        }
+        .segment-stat .seg-count {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .survey-section-header {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 20px 0 6px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e0e0e0;
+        }
         .breakdown-legend span::before {
             content: '';
             display: inline-block;
@@ -779,21 +824,32 @@
             const data = filteredData[s.id];
             const nps = calculateNps(data?.responses || []);
             if (nps.total === 0) return;
-            const pPct = ((nps.promoters / nps.total) * 100).toFixed(1);
-            const paPct = ((nps.passives / nps.total) * 100).toFixed(1);
-            const dPct = ((nps.detractors / nps.total) * 100).toFixed(1);
-            html += `<div style="margin-bottom: 16px;">
-                <strong>${s.label}</strong>
-                <div class="breakdown-bar">
-                    <div class="promoter" style="width:${pPct}%" title="Promoters: ${pPct}%"></div>
-                    <div class="passive" style="width:${paPct}%" title="Passives: ${paPct}%"></div>
-                    <div class="detractor" style="width:${dPct}%" title="Detractors: ${dPct}%"></div>
+            const pPct  = ((nps.promoters  / nps.total) * 100).toFixed(1);
+            const paPct = ((nps.passives   / nps.total) * 100).toFixed(1);
+            const dPct  = ((nps.detractors / nps.total) * 100).toFixed(1);
+            const surveyTitle = product.surveys.length > 1 ? `<div class="survey-section-header">${s.label}</div>` : '';
+            html += `${surveyTitle}
+            <div class="segment-stats">
+                <div class="segment-stat promoter-stat">
+                    <div class="seg-pct">${pPct}%</div>
+                    <div class="seg-label">Promoters</div>
+                    <div class="seg-count">${nps.promoters} of ${nps.total}</div>
                 </div>
-                <div class="breakdown-legend">
-                    <span class="leg-promoter">Promoters ${pPct}%</span>
-                    <span class="leg-passive">Passives ${paPct}%</span>
-                    <span class="leg-detractor">Detractors ${dPct}%</span>
+                <div class="segment-stat passive-stat">
+                    <div class="seg-pct">${paPct}%</div>
+                    <div class="seg-label">Passives</div>
+                    <div class="seg-count">${nps.passives} of ${nps.total}</div>
                 </div>
+                <div class="segment-stat detractor-stat">
+                    <div class="seg-pct">${dPct}%</div>
+                    <div class="seg-label">Detractors</div>
+                    <div class="seg-count">${nps.detractors} of ${nps.total}</div>
+                </div>
+            </div>
+            <div class="breakdown-bar">
+                <div class="promoter" style="width:${pPct}%" title="Promoters: ${pPct}%"></div>
+                <div class="passive"  style="width:${paPct}%" title="Passives: ${paPct}%"></div>
+                <div class="detractor" style="width:${dPct}%" title="Detractors: ${dPct}%"></div>
             </div>`;
         });
 
