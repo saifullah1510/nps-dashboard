@@ -820,38 +820,73 @@
         });
         html += '</div>';
 
-        product.surveys.forEach(s => {
-            const data = filteredData[s.id];
+        if (product.surveys.length === 1) {
+            // Single survey (Design) — show stats for that survey directly
+            const data = filteredData[product.surveys[0].id];
             const nps = calculateNps(data?.responses || []);
-            if (nps.total === 0) return;
-            const pPct  = ((nps.promoters  / nps.total) * 100).toFixed(1);
-            const paPct = ((nps.passives   / nps.total) * 100).toFixed(1);
-            const dPct  = ((nps.detractors / nps.total) * 100).toFixed(1);
-            const surveyTitle = product.surveys.length > 1 ? `<div class="survey-section-header">${s.label}</div>` : '';
-            html += `${surveyTitle}
-            <div class="segment-stats">
-                <div class="segment-stat promoter-stat">
-                    <div class="seg-pct">${pPct}%</div>
-                    <div class="seg-label">Promoters</div>
-                    <div class="seg-count">${nps.promoters} of ${nps.total}</div>
+            if (nps.total > 0) {
+                const pPct  = ((nps.promoters  / nps.total) * 100).toFixed(1);
+                const paPct = ((nps.passives   / nps.total) * 100).toFixed(1);
+                const dPct  = ((nps.detractors / nps.total) * 100).toFixed(1);
+                html += `<div class="segment-stats">
+                    <div class="segment-stat promoter-stat">
+                        <div class="seg-pct">${pPct}%</div>
+                        <div class="seg-label">Promoters</div>
+                        <div class="seg-count">${nps.promoters} of ${nps.total}</div>
+                    </div>
+                    <div class="segment-stat passive-stat">
+                        <div class="seg-pct">${paPct}%</div>
+                        <div class="seg-label">Passives</div>
+                        <div class="seg-count">${nps.passives} of ${nps.total}</div>
+                    </div>
+                    <div class="segment-stat detractor-stat">
+                        <div class="seg-pct">${dPct}%</div>
+                        <div class="seg-label">Detractors</div>
+                        <div class="seg-count">${nps.detractors} of ${nps.total}</div>
+                    </div>
                 </div>
-                <div class="segment-stat passive-stat">
-                    <div class="seg-pct">${paPct}%</div>
-                    <div class="seg-label">Passives</div>
-                    <div class="seg-count">${nps.passives} of ${nps.total}</div>
+                <div class="breakdown-bar">
+                    <div class="promoter" style="width:${pPct}%" title="Promoters: ${pPct}%"></div>
+                    <div class="passive"  style="width:${paPct}%" title="Passives: ${paPct}%"></div>
+                    <div class="detractor" style="width:${dPct}%" title="Detractors: ${dPct}%"></div>
+                </div>`;
+            }
+        } else {
+            // Multi-survey (Manage360, Creator) — show averaged stats across all surveys
+            const surveyNps = product.surveys.map(s => calculateNps(filteredData[s.id]?.responses || [])).filter(n => n.total > 0);
+            if (surveyNps.length > 0) {
+                const avgP  = (surveyNps.reduce((sum, n) => sum + (n.promoters  / n.total) * 100, 0) / surveyNps.length).toFixed(1);
+                const avgPa = (surveyNps.reduce((sum, n) => sum + (n.passives   / n.total) * 100, 0) / surveyNps.length).toFixed(1);
+                const avgD  = (surveyNps.reduce((sum, n) => sum + (n.detractors / n.total) * 100, 0) / surveyNps.length).toFixed(1);
+                const totalRespondents = surveyNps.reduce((sum, n) => sum + n.total, 0);
+                const totalPromoters   = surveyNps.reduce((sum, n) => sum + n.promoters, 0);
+                const totalPassives    = surveyNps.reduce((sum, n) => sum + n.passives, 0);
+                const totalDetractors  = surveyNps.reduce((sum, n) => sum + n.detractors, 0);
+                html += `<div style="font-size:12px;color:#888;margin-bottom:4px;">Avg across ${surveyNps.length} surveys &mdash; ${totalRespondents} total responses</div>
+                <div class="segment-stats">
+                    <div class="segment-stat promoter-stat">
+                        <div class="seg-pct">${avgP}%</div>
+                        <div class="seg-label">Promoters</div>
+                        <div class="seg-count">${totalPromoters} responses</div>
+                    </div>
+                    <div class="segment-stat passive-stat">
+                        <div class="seg-pct">${avgPa}%</div>
+                        <div class="seg-label">Passives</div>
+                        <div class="seg-count">${totalPassives} responses</div>
+                    </div>
+                    <div class="segment-stat detractor-stat">
+                        <div class="seg-pct">${avgD}%</div>
+                        <div class="seg-label">Detractors</div>
+                        <div class="seg-count">${totalDetractors} responses</div>
+                    </div>
                 </div>
-                <div class="segment-stat detractor-stat">
-                    <div class="seg-pct">${dPct}%</div>
-                    <div class="seg-label">Detractors</div>
-                    <div class="seg-count">${nps.detractors} of ${nps.total}</div>
-                </div>
-            </div>
-            <div class="breakdown-bar">
-                <div class="promoter" style="width:${pPct}%" title="Promoters: ${pPct}%"></div>
-                <div class="passive"  style="width:${paPct}%" title="Passives: ${paPct}%"></div>
-                <div class="detractor" style="width:${dPct}%" title="Detractors: ${dPct}%"></div>
-            </div>`;
-        });
+                <div class="breakdown-bar">
+                    <div class="promoter" style="width:${avgP}%" title="Promoters: ${avgP}%"></div>
+                    <div class="passive"  style="width:${avgPa}%" title="Passives: ${avgPa}%"></div>
+                    <div class="detractor" style="width:${avgD}%" title="Detractors: ${avgD}%"></div>
+                </div>`;
+            }
+        }
 
         const isManage360 = tabKey === 'manage360';
         const allResponses = product.surveys.flatMap(s =>
